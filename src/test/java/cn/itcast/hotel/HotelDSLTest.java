@@ -48,6 +48,7 @@ public class HotelDSLTest {
         handlerResponse(request);
     }
 
+    //布尔查询
     @Test
     public void searchBool() throws IOException {
         SearchRequest request = new SearchRequest("hotel");
@@ -58,6 +59,7 @@ public class HotelDSLTest {
         handlerResponse(request);
     }
 
+    //排序
     @Test
     public void pageAndSort() throws IOException {
         int pageNum = 1;

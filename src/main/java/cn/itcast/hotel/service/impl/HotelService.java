@@ -13,9 +13,16 @@ import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.geo.GeoPoint;
+import org.elasticsearch.common.unit.DistanceUnit;
+import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.query.functionscore.FunctionScoreQueryBuilder;
+import org.elasticsearch.index.query.functionscore.ScoreFunctionBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.sort.SortBuilders;
+import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -29,26 +36,72 @@ import java.util.Map;
 public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHotelService {
     @Autowired
     private RestHighLevelClient client;
+
     @Override
     public Page list(RequestParam requestParam) {
-        SearchRequest request = new SearchRequest("hotel");
-        String key = requestParam.getKey();
-        int page = requestParam.getPage();
-        int size = requestParam.getSize();
-        if (StringUtils.isNotBlank(key)){
-            request.source().query(QueryBuilders.matchQuery("all",key));
-        } else {
-            request.source().query(QueryBuilders.matchAllQuery());
-        }
-        request.source().from((page - 1)*size).size(size);
-        //高亮
-        //request.source().highlighter(new HighlightBuilder().field("name").requireFieldMatch(false));
         try {
+            SearchRequest request = new SearchRequest("hotel");
+            hanlerSearch(requestParam, request);
             return handlerResponse(request);
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
+    }
+
+    private void hanlerSearch(RequestParam requestParam, SearchRequest request) {
+        String key = requestParam.getKey();
+        int page = requestParam.getPage();
+        int size = requestParam.getSize();
+        String city = requestParam.getCity();
+        String starName = requestParam.getStarName();
+        String brand = requestParam.getBrand();
+        Integer minPrice = requestParam.getMinPrice();
+        Integer maxPrice = requestParam.getMaxPrice();
+        String sortBy = requestParam.getSortBy();
+        String location = requestParam.getLocation();
+        //复合查询 构建布尔查询
+        BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
+        //搜索关键词参与算分
+        if (StringUtils.isNotBlank(key)) {
+            boolQueryBuilder.must(QueryBuilders.matchQuery("all", key));
+        } else {
+            boolQueryBuilder.must(QueryBuilders.matchAllQuery());
+        }
+        if (StringUtils.isNotBlank(city)) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("city", city));
+        }
+        if (StringUtils.isNotBlank(starName)) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("starName", starName));
+        }
+        if (StringUtils.isNotBlank(brand)) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("brand", brand));
+        }
+        if (minPrice != null && maxPrice != null) {
+            boolQueryBuilder.filter(QueryBuilders.rangeQuery("price").gte(minPrice).lte(maxPrice));
+        }
+        //高亮
+        //request.source().highlighter(new HighlightBuilder().field("name").requireFieldMatch(false));
+        request.source().query(boolQueryBuilder);
+        request.source().from((page - 1) * size).size(size);
+        //if (!sortBy.equals("default")){
+        //    request.source().sort(sortBy, SortOrder.ASC);
+        //}
+        //位置排序
+        if (StringUtils.isNotBlank(location)){
+            request.source().sort(SortBuilders
+                    .geoDistanceSort("location", new GeoPoint(location)).order(SortOrder.ASC)
+                    .unit(DistanceUnit.KILOMETERS));
+        }
+        FunctionScoreQueryBuilder functionScoreQuery = QueryBuilders.functionScoreQuery(QueryBuilders.functionScoreQuery(boolQueryBuilder, new FunctionScoreQueryBuilder.FilterFunctionBuilder[]{
+                new FunctionScoreQueryBuilder.FilterFunctionBuilder(
+                        //过滤条件
+                        QueryBuilders.termQuery("isAD", true),
+                        //算分函数
+                        ScoreFunctionBuilders.weightFactorFunction(10)
+                )
+        }));
+        request.source().query(functionScoreQuery);
     }
 
     private Page handlerResponse(SearchRequest request) throws IOException {
@@ -66,6 +119,10 @@ public class HotelService extends ServiceImpl<HotelMapper, Hotel> implements IHo
                 HighlightField highlightField = highlightFields.get("name");
                 String name = highlightField.getFragments()[0].string();
                 hotelDoc.setName(name);
+            }
+            Object[] sortValues = hit.getSortValues();
+            if (sortValues.length != 0){
+                hotelDoc.setDistance(sortValues[0]);
             }
             hotels.add(hotelDoc);
         }
