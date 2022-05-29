@@ -17,6 +17,10 @@ import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.search.suggest.Suggest;
+import org.elasticsearch.search.suggest.SuggestBuilder;
+import org.elasticsearch.search.suggest.SuggestBuilders;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,6 +101,25 @@ public class HotelDSLTest {
         }
 
     }
+
+    //自动补全
+    @Test
+    public void suggestionTest() throws IOException {
+        SearchRequest request = new SearchRequest("hotel");
+        request.source().suggest(new SuggestBuilder().addSuggestion("title_suggest"
+                ,SuggestBuilders.completionSuggestion("suggestion").prefix("stj")
+                        .skipDuplicates(true)
+                        .size(10)));
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        Suggest suggest = response.getSuggest();
+        CompletionSuggestion suggestion = suggest.getSuggestion("title_suggest");
+        for (CompletionSuggestion.Entry.Option option : suggestion.getOptions()) {
+            String text = option.getText().string();
+            System.out.println(text);
+        }
+
+    }
+
 
     private void handlerResponse(SearchRequest request) throws IOException {
         SearchResponse search = client.search(request, RequestOptions.DEFAULT);
