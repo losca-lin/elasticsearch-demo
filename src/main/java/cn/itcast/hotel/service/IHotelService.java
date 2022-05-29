@@ -5,6 +5,11 @@ import cn.itcast.hotel.pojo.Page;
 import cn.itcast.hotel.pojo.RequestParam;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import java.util.List;
+import java.util.Map;
+
 public interface IHotelService extends IService<Hotel> {
     Page list(RequestParam requestParam);
+
+    Map<String, List<String>> filters(RequestParam requestParam);
 }

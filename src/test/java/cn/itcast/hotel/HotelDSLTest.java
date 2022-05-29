@@ -11,6 +11,9 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.SortOrder;
@@ -78,6 +81,21 @@ public class HotelDSLTest {
         //高亮
         request.source().highlighter(new HighlightBuilder().field("name").requireFieldMatch(false));
         handlerResponse(request);
+    }
+    //文档聚合
+    @Test
+    public void aggsTest() throws IOException {
+        SearchRequest request = new SearchRequest("hotel");
+        request.source().size(0);
+        request.source().aggregation(AggregationBuilders.terms("brandAggs").field("brand").size(20));
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        Aggregations aggregations = response.getAggregations();
+        Terms brandTerms = aggregations.get("brandAggs");
+        for (Terms.Bucket bucket : brandTerms.getBuckets()) {
+            String brandName = bucket.getKeyAsString();
+            System.out.println(brandName);
+        }
+
     }
 
     private void handlerResponse(SearchRequest request) throws IOException {
